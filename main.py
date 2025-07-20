@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import google.generativeai as genai
 import os
@@ -188,6 +189,28 @@ async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "service": "POS CX Voice Assistant"}
 
+@app.post("/llm")
+async def retell_llm_handler(request: Request):
+    """Custom LLM endpoint for Retell"""
+    try:
+        body = await request.json()
+        prompt = body.get("prompt", "")
+        session_id = body.get("session_id", "default_session")
+
+        logger.info(f"🟢 Retell prompt: {prompt} | Session: {session_id}")
+
+        messages = [Message(role="user", content=prompt)]
+        formatted_messages = format_messages_for_gemini(messages, session_id)
+
+        response = model.generate_content(formatted_messages)
+        response_text = response.text.strip()
+
+        return JSONResponse({"response": response_text})
+
+    except Exception as e:
+        logger.error(f"Retell LLM error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")
+
 @app.get("/")
 async def root():
     """Root endpoint with service information"""
@@ -197,6 +220,7 @@ async def root():
         "description": "Custom LLM for Retell voice agent integration",
         "endpoints": {
             "chat": "/chat",
+            "llm": "/llm",
             "health": "/health"
         }
     }
